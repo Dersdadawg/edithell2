@@ -11,6 +11,9 @@ export default defineConfig({
         changeOrigin: true
       }
     }
+  },
+  // Use environment variable for API URL in production
+  define: {
+    'import.meta.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL || '/api')
   }
 });
-
