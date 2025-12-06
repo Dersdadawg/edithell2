@@ -266,6 +266,120 @@ Make sure each error's original_text appears exactly as written in the article.`
   }
 });
 
+// POST /api/analyze-article
+app.post('/api/analyze-article', async (req, res) => {
+  try {
+    const { styleGuideId, article } = req.body;
+    
+    if (!styleGuideId || !styleGuides.has(styleGuideId)) {
+      return res.status(400).json({ error: 'Invalid styleGuideId' });
+    }
+    
+    if (!article || article.trim().length === 0) {
+      return res.status(400).json({ error: 'Article text is required' });
+    }
+    
+    const styleGuide = styleGuides.get(styleGuideId);
+    
+    const systemPrompt = `You are a copy editor analyzer. Analyze the provided article and identify all errors that violate general grammar rules and the provided style guide rules.
+
+Your task:
+1. Read through the article carefully
+2. Identify ALL errors including:
+   - Grammar errors (subject-verb agreement, tense consistency, etc.)
+   - Spelling errors
+   - Punctuation errors
+   - Style guide violations (based on the provided style guide rules)
+   - Other common copy editing issues
+3. For each error, provide the exact text containing the error and the correction
+
+Be thorough - find as many errors as you can. Include both obvious errors and subtle style guide violations.
+
+Return a JSON object with this exact structure:
+{
+  "article": "the original article text (unchanged)",
+  "errors": [
+    {
+      "id": "e1",
+      "error_type": "grammar | spelling | punctuation | style_guide | other",
+      "category": "short category like capitalization, comma, date_format, etc.",
+      "rule_description": "Short description of the rule being broken",
+      "original_text": "exact substring containing the error, exactly as in article",
+      "suggested_correction": "corrected version of that substring",
+      "explanation": "1-3 sentences explaining the rule and fix"
+    }
+  ]
+}
+
+Make sure each error's original_text appears exactly as written in the article.`;
+
+    const userPrompt = `Style Guide Rules Summary:
+${styleGuide.rulesSummary}
+
+Article to analyze:
+${article}
+
+Analyze this article and identify all copy editing errors. Return the article unchanged and a list of all errors found.`;
+
+    const response = await openai.chat.completions.create({
+      model: EVAL_MODEL, // Use the evaluation model for analysis
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.3 // Lower temperature for more consistent analysis
+    });
+    
+    // Validate response
+    if (!response.choices || !response.choices[0] || !response.choices[0].message) {
+      throw new Error('Invalid response from OpenAI API');
+    }
+    
+    const content = response.choices[0].message.content;
+    if (!content || content.trim().length === 0) {
+      throw new Error('Empty response from OpenAI API');
+    }
+    
+    let articleData;
+    try {
+      articleData = JSON.parse(content);
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError);
+      console.error('Response content:', content.substring(0, 500));
+      throw new Error('Failed to parse article analysis from OpenAI response');
+    }
+    
+    // Use the original article text provided by user, not what GPT returns
+    const analyzedArticle = articleData.article || article;
+    const errors = articleData.errors || [];
+    
+    if (!Array.isArray(errors)) {
+      return res.status(500).json({ error: 'Invalid response format from OpenAI' });
+    }
+    
+    // Attach offsets
+    const errorsWithOffsets = attachOffsets(analyzedArticle, errors);
+    
+    const gameId = uuidv4();
+    games.set(gameId, {
+      styleGuideId,
+      article: analyzedArticle, // Use the original article
+      errors: errorsWithOffsets,
+      createdAt: new Date().toISOString()
+    });
+    
+    res.json({
+      gameId,
+      article: analyzedArticle,
+      errors: errorsWithOffsets
+    });
+  } catch (error) {
+    console.error('Error analyzing article:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /api/submit-edits
 app.post('/api/submit-edits', async (req, res) => {
   try {
@@ -495,7 +609,13 @@ app.get('/api/style-guides/:id', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+// Export for Vercel serverless
+export default app;
+
+// Only listen if running locally (not on Vercel)
+if (process.env.VERCEL !== '1') {
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
 
