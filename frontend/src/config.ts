@@ -21,4 +21,3 @@ export const API_BASE_URL = getApiBaseUrl();
 // Log for debugging (always log to help debug)
 console.log('API Base URL:', API_BASE_URL);
 console.log('VITE_API_URL env var:', import.meta.env.VITE_API_URL);
-
