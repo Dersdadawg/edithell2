@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { API_BASE_URL } from '../config';
 
 interface StyleGuideSectionProps {
   onStyleGuideProcessed: (styleGuideId: string, name: string) => void;
@@ -38,7 +39,7 @@ export default function StyleGuideSection({ onStyleGuideProcessed, activeStyleGu
     setError(null);
 
     try {
-      const response = await fetch('/api/style-guides', {
+      const response = await fetch(`${API_BASE_URL}/style-guides`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -46,15 +47,24 @@ export default function StyleGuideSection({ onStyleGuideProcessed, activeStyleGu
         body: JSON.stringify({ name, text }),
       });
 
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Non-JSON response:', text.substring(0, 200));
+        throw new Error(`Server returned non-JSON response. Check API URL: ${API_BASE_URL}/style-guides`);
+      }
+
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to process style guide');
+        throw new Error(errorData.error || `Failed to process style guide (${response.status})`);
       }
 
       const data = await response.json();
       setRulesSummary(data.rulesSummary);
       onStyleGuideProcessed(data.styleGuideId, name);
     } catch (err: any) {
+      console.error('Style guide upload error:', err);
       setError(err.message || 'An error occurred');
     } finally {
       setLoading(false);

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { GameData, ScoreResult } from '../types';
+import { API_BASE_URL } from '../config';
 
 interface GameEditorSectionProps {
   game: GameData;
@@ -19,7 +20,7 @@ export default function GameEditorSection({ game, styleGuideName, onScoreReceive
     setError(null);
 
     try {
-      const response = await fetch('/api/hint', {
+      const response = await fetch(`${API_BASE_URL}/hint`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -27,9 +28,17 @@ export default function GameEditorSection({ game, styleGuideName, onScoreReceive
         body: JSON.stringify({ gameId: game.gameId }),
       });
 
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Non-JSON response:', text.substring(0, 200));
+        throw new Error(`Server returned non-JSON response. Check API URL: ${API_BASE_URL}/hint`);
+      }
+
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to get hint');
+        throw new Error(errorData.error || `Failed to get hint (${response.status})`);
       }
 
       const data = await response.json();
@@ -46,7 +55,7 @@ export default function GameEditorSection({ game, styleGuideName, onScoreReceive
     setError(null);
 
     try {
-      const response = await fetch('/api/submit-edits', {
+      const response = await fetch(`${API_BASE_URL}/submit-edits`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -57,9 +66,17 @@ export default function GameEditorSection({ game, styleGuideName, onScoreReceive
         }),
       });
 
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Non-JSON response:', text.substring(0, 200));
+        throw new Error(`Server returned non-JSON response. Check API URL: ${API_BASE_URL}/submit-edits`);
+      }
+
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to submit edits');
+        throw new Error(errorData.error || `Failed to submit edits (${response.status})`);
       }
 
       const score: ScoreResult = await response.json();

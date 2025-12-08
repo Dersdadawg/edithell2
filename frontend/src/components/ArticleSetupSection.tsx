@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ArticleGenerationParams, GameData } from '../types';
+import { API_BASE_URL } from '../config';
 
 interface ArticleSetupSectionProps {
   styleGuideId: string | null;
@@ -47,7 +48,7 @@ export default function ArticleSetupSection({ styleGuideId, onArticleGenerated }
     setError(null);
 
     try {
-      const response = await fetch('/api/analyze-article', {
+      const response = await fetch(`${API_BASE_URL}/analyze-article`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -58,9 +59,17 @@ export default function ArticleSetupSection({ styleGuideId, onArticleGenerated }
         }),
       });
 
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Non-JSON response:', text.substring(0, 200));
+        throw new Error(`Server returned non-JSON response. Check API URL: ${API_BASE_URL}/analyze-article`);
+      }
+
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to analyze article');
+        throw new Error(errorData.error || `Failed to analyze article (${response.status})`);
       }
 
       const data: GameData = await response.json();
@@ -94,7 +103,7 @@ export default function ArticleSetupSection({ styleGuideId, onArticleGenerated }
         tone,
       };
 
-      const response = await fetch('/api/generate-article', {
+      const response = await fetch(`${API_BASE_URL}/generate-article`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -102,9 +111,17 @@ export default function ArticleSetupSection({ styleGuideId, onArticleGenerated }
         body: JSON.stringify(params),
       });
 
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Non-JSON response:', text.substring(0, 200));
+        throw new Error(`Server returned non-JSON response. Check API URL: ${API_BASE_URL}/generate-article`);
+      }
+
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate article');
+        throw new Error(errorData.error || `Failed to generate article (${response.status})`);
       }
 
       const data: GameData = await response.json();
